@@ -3,6 +3,9 @@ name: Build APK + IPA
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-ios:
     name: iOS Build
@@ -12,7 +15,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           architecture: x64
 
       - run: flutter pub get
@@ -32,14 +35,11 @@ jobs:
         run: zip -qq -r -9 FlutterApp.ipa Payload
         working-directory: build/ios/iphoneos
 
-      - name: Upload IPA to release
-        uses: svenstaro/upload-release-action@v2
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/ios/iphoneos/FlutterApp.ipa
-          tag: v1.0
-          overwrite: true
-          body: "Flutter release: iOS + Android"
+          name: ios-ipa
+          path: build/ios/iphoneos/FlutterApp.ipa
 
 
   build-android:
@@ -50,16 +50,35 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
 
       - run: flutter pub get
 
       - run: flutter build apk --release
 
-      - name: Upload APK to release
-        uses: svenstaro/upload-release-action@v2
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/app/outputs/flutter-apk/app-release.apk
-          tag: v1.0
-          overwrite: true
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+
+  release:
+    name: Create Release
+    needs: [build-ios, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
+          files: |
+            artifacts/ios-ipa/FlutterApp.ipa
+            artifacts/android-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
